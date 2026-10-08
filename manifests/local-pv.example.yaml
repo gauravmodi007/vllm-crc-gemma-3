@@ -1,0 +1,29 @@
+# EXAMPLE ONLY. Replace node/path and provision the directory INSIDE the CRC node.
+# Do not apply blindly. Retain preserves data after PVC deletion; manual recovery required.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: vllm-local
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: WaitForFirstConsumer
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: vllm-model-cache-local
+spec:
+  capacity:
+    storage: 128Gi
+  volumeMode: Filesystem
+  accessModes: [ReadWriteOnce]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: vllm-local
+  local:
+    path: /REPLACE_WITH_NODE_DIRECTORY
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values: [REPLACE_WITH_CRC_NODE_NAME]

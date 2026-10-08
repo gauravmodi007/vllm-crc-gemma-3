@@ -1,0 +1,124 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "CRC: inspect",
+      "type": "process",
+      "command": "uv",
+      "args": [
+        "run",
+        "python",
+        "scripts/manage.py",
+        "inspect"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "CRC: pin-image",
+      "type": "process",
+      "command": "uv",
+      "args": [
+        "run",
+        "python",
+        "scripts/manage.py",
+        "pin-image"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "CRC: render",
+      "type": "process",
+      "command": "uv",
+      "args": [
+        "run",
+        "python",
+        "scripts/manage.py",
+        "render"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "CRC: preflight",
+      "type": "process",
+      "command": "uv",
+      "args": [
+        "run",
+        "python",
+        "scripts/manage.py",
+        "preflight"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "CRC: deploy",
+      "type": "process",
+      "command": "uv",
+      "args": [
+        "run",
+        "python",
+        "scripts/manage.py",
+        "deploy"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "CRC: status",
+      "type": "process",
+      "command": "uv",
+      "args": [
+        "run",
+        "python",
+        "scripts/manage.py",
+        "status"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "CRC: diagnose",
+      "type": "process",
+      "command": "uv",
+      "args": [
+        "run",
+        "python",
+        "scripts/manage.py",
+        "diagnose"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "CRC: port-forward",
+      "type": "process",
+      "command": "uv",
+      "args": [
+        "run",
+        "python",
+        "scripts/manage.py",
+        "port-forward"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "CRC: stop",
+      "type": "process",
+      "command": "uv",
+      "args": [
+        "run",
+        "python",
+        "scripts/manage.py",
+        "stop"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "CRC: smoke tests",
+      "type": "process",
+      "command": "uv",
+      "args": [
+        "run",
+        "python",
+        "scripts/smoke_test.py"
+      ],
+      "problemMatcher": []
+    }
+  ]
+}

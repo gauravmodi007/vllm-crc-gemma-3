@@ -1,0 +1,15 @@
+{
+  "namespace": "vllm-poc",
+  "image": "docker.io/vllm/vllm-openai-cpu@sha256:8024248339dc6878daa5349344ed29d49c8a6732f6bdf7400fda32ce33e4b30b",
+  "model": "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+  "model_revision": null,
+  "served_model_name": "tinyllama",
+  "storage_class": "crc-csi-hostpath-provisioner",
+  "existing_pv": null,
+  "storage_size": "20Gi",
+  "cpu_request": "2",
+  "cpu_limit": "2",
+  "memory": "6Gi",
+  "max_model_len": 128,
+  "kv_cache_memory_bytes": 6291456
+}
