@@ -86,6 +86,8 @@ uv run python scripts/manage.py render
 
 Open `rendered/app.yaml`, `rendered/preflight.yaml`, and `rendered/route.yaml`. These are generated from `config.json` and `scripts/manage.py`; edit those sources, not rendered output.
 
+`rendered/app.yaml` is checked in as the deployed pod-configuration snapshot. Refresh it with `uv run python scripts/manage.py render` after changing the source configuration. See [CRC_STATUS.md](./CRC_STATUS.md) for the live cluster and pod-health snapshot.
+
 | Resource or setting | Meaning |
 |---|---|
 | Dedicated `vllm-poc` project | Keeps the POC resources together |
