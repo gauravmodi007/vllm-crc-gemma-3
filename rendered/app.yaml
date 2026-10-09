@@ -1,13 +1,13 @@
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: vllm
+  name: gemma-vllm
   namespace: vllm-poc
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: model-cache
+  name: gemma-model-cache
   namespace: vllm-poc
 spec:
   accessModes:
@@ -20,7 +20,7 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: vllm-tinyllama
+  name: vllm-gemma-3
   namespace: vllm-poc
 spec:
   replicas: 1
@@ -28,12 +28,12 @@ spec:
     type: Recreate
   selector:
     matchLabels: &id001
-      app: vllm-tinyllama
+      app: vllm-gemma-3
   template:
     metadata:
       labels: *id001
     spec:
-      serviceAccountName: vllm
+      serviceAccountName: gemma-vllm
       automountServiceAccountToken: false
       enableServiceLinks: false
       nodeSelector:
@@ -49,24 +49,30 @@ spec:
         - vllm
         - serve
         args:
-        - TinyLlama/TinyLlama-1.1B-Chat-v1.0
+        - RedHatAI/gemma-3-1b-it-quantized.w8a8
         - --host
         - 0.0.0.0
         - --port
         - '8000'
         - --served-model-name
-        - tinyllama
+        - gemma-3-1b-it
         - --dtype
         - bfloat16
         - --max-model-len
         - '128'
+        - --quantization
+        - compressed-tensors
         - --kv-cache-memory-bytes
-        - '6291456'
+        - '33554432'
         - --max-num-seqs
         - '1'
         - --max-num-batched-tokens
         - '128'
         - --enforce-eager
+        - --revision
+        - 24b86eded029ac814b8341f2aeae195b072f43bf
+        - --tokenizer-revision
+        - 24b86eded029ac814b8341f2aeae195b072f43bf
         env:
         - name: HOME
           value: /tmp
@@ -128,7 +134,7 @@ spec:
       volumes:
       - name: cache
         persistentVolumeClaim:
-          claimName: model-cache
+          claimName: gemma-model-cache
       - name: shm
         emptyDir:
           medium: Memory
@@ -137,11 +143,11 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: vllm-tinyllama
+  name: vllm-gemma-3
   namespace: vllm-poc
 spec:
   selector:
-    app: vllm-tinyllama
+    app: vllm-gemma-3
   ports:
   - name: http
     port: 8000

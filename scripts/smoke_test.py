@@ -3,7 +3,7 @@ from pathlib import Path
 import httpx
 
 def main():
-    ap=argparse.ArgumentParser();ap.add_argument('--url',default='http://127.0.0.1:8000');ap.add_argument('--model',default='tinyllama')
+    ap=argparse.ArgumentParser();ap.add_argument('--url',default='http://127.0.0.1:8000');ap.add_argument('--model',default='gemma-3-1b-it')
     a=ap.parse_args();results=[]
     with httpx.Client(base_url=a.url.rstrip('/'),timeout=300) as client:
         r=client.get('/health');r.raise_for_status()

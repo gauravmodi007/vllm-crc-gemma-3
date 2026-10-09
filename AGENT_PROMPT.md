@@ -1,6 +1,6 @@
-You are working in this VS Code project. Complete a local OpenShift Local (CRC) CPU inference POC. CRC is already running; inspect it rather than reinstalling it.
+You are working in this VS Code project. Complete a local OpenShift Local (CRC) Gemma CPU inference POC in this separate project checkout. CRC is already running; inspect it rather than reinstalling it.
 
-Target: amd64/x86_64 CRC node on Intel Xeon Gold 6448H host; TinyLlama/TinyLlama-1.1B-Chat-v1.0; official vLLM CPU image; one serving replica with a 6Gi memory limit and a low-concurrency POC profile. The 512-token/1Gi KV-cache starting profile failed on this CRC; the current config uses a 128-token context, one sequence, and a 6MiB KV cache. Use uv for local Python tooling and oc/YAML for deployment. No GPU.
+Target: amd64/x86_64 CRC node on Intel Xeon Gold 6448H host; pinned INT8 W8A8 compressed-tensors `RedHatAI/gemma-3-1b-it-quantized.w8a8` safetensors checkpoint; official vLLM CPU image; one 6Gi serving replica, 128-token context, one sequence, 32MiB KV cache. The selected model repo is public, so do not pass the existing HF token Secret into the Gemma workload. TinyLlama has been scaled to zero; preserve its PVC. Use unique Gemma resource names in the existing namespace. Use uv and oc/YAML. No GPU.
 
 Read README.md, config.json, and scripts before execution. The intended namespace is vllm-poc. Verify current oc cluster/context is the user's local CRC before mutations. Do not switch silently to a remote/shared cluster. Do not read or print credential files/tokens. Use existing authenticated oc session.
 

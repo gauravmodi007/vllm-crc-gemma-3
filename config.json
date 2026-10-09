@@ -1,9 +1,15 @@
 {
   "namespace": "vllm-poc",
   "image": "docker.io/vllm/vllm-openai-cpu@sha256:8024248339dc6878daa5349344ed29d49c8a6732f6bdf7400fda32ce33e4b30b",
-  "model": "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
-  "model_revision": null,
-  "served_model_name": "tinyllama",
+  "model": "RedHatAI/gemma-3-1b-it-quantized.w8a8",
+  "model_revision": "24b86eded029ac814b8341f2aeae195b072f43bf",
+  "quantization": "compressed-tensors",
+  "served_model_name": "gemma-3-1b-it",
+  "service_account_name": "gemma-vllm",
+  "cache_claim_name": "gemma-model-cache",
+  "deployment_name": "vllm-gemma-3",
+  "service_name": "vllm-gemma-3",
+  "preflight_job_name": "gemma-preflight",
   "storage_class": "crc-csi-hostpath-provisioner",
   "existing_pv": null,
   "storage_size": "20Gi",
@@ -11,5 +17,5 @@
   "cpu_limit": "2",
   "memory": "6Gi",
   "max_model_len": 128,
-  "kv_cache_memory_bytes": 6291456
+  "kv_cache_memory_bytes": 33554432
 }
