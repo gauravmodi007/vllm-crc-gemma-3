@@ -1,6 +1,6 @@
 # Gemma 3 1B INT8 on vLLM CPU in OpenShift Local (CRC)
 
-A VS Code POC for an already-running CRC cluster. It serves the pinned INT8 W8A8 compressed-tensors safetensors checkpoint `RedHatAI/gemma-3-1b-it-quantized.w8a8` on the Linux amd64 CPU node, using the official vLLM CPU image, one 6 GiB serving replica, and a persistent cache claim. No GPU is requested.
+A VS Code POC for an OpenShift Local (CRC) cluster. The new-machine instructions below set up CRC and the project tools before deploying the pinned INT8 W8A8 compressed-tensors safetensors checkpoint `RedHatAI/gemma-3-1b-it-quantized.w8a8` on a Linux amd64 CPU node, using the official vLLM CPU image, one 6 GiB serving replica, and a persistent cache claim. No GPU is requested.
 
 This is not the originally requested `ggml-org/gemma-3-1b-it-GGUF` Q4_K_M file. vLLM 0.31's GGUF plugin requires CUDA or ROCm, while CRC is CPU-only. A public 4-bit AWQ safetensors checkpoint was also tested: it fit during startup, but inference failed because this CPU image lacks the required `cpu_gemm_wna16` operator. The selected Red Hat AI W8A8 checkpoint is INT8, not Q4; its `model.safetensors` file is about 1.91 GB. vLLM 0.31's quantization compatibility table lists INT8 W8A8 on x86 CPU. Follow Google's Gemma terms.
 
@@ -21,46 +21,106 @@ Validated on 2026-10-08:
 
 The raw smoke-test output is saved in `results/smoke-test.json`.
 
-## 1. Open the project
+## Before running this project: prepare a new machine
 
-Open `vllm-crc-gemma-3` in VS Code and use a terminal in that folder. All following commands run from this folder and work in PowerShell, Bash, or zsh without line continuations.
+This POC targets an x86_64 host and an OpenShift Local **OpenShift** preset that provides a Linux `amd64` node. Check the current [CRC installation and platform requirements](https://crc.dev/docs/introducing/) before installing. CRC's documented OpenShift-preset minimum is 4 CPUs, 10.5 GB of RAM, and 35 GB of disk; those are cluster minimums, not spare capacity for this workload. The model pod itself requests 2 CPUs and 6 GiB, in addition to OpenShift's own resource use, and its PVC requests 20 GiB. Leave enough host memory and disk for the CRC VM, container image, model cache, and cluster data.
 
-Required commands on PATH: `oc`, `uv`, and Python managed by uv. Podman is used only to resolve the image digest; it is not the OpenShift runtime. If you already have a verified image digest, set it in `config.json` and skip Podman. The cluster uses CRI-O to run the containers.
+You will need:
 
-CRC must use the OpenShift preset. CRC being running does not prove the current `oc` context is your CRC cluster.
+- Git, VS Code (optional), [uv](https://docs.astral.sh/uv/), and Python 3.11 or newer.
+- [OpenShift Local (CRC)](https://developers.redhat.com/products/openshift-local/overview) and its `oc` CLI. Follow the current installer instructions for your operating system; on Windows, complete CRC setup in a PowerShell terminal with the required virtualization support enabled.
+- Network access from the host and CRC VM to the Red Hat registry, Docker Hub, and Hugging Face. Configure your proxy and trusted CA if your network requires them.
+- Podman only if you intend to resolve a new image tag to a digest. The checked-in `config.json` already pins an amd64 image digest, so Podman is not needed for the documented default deployment.
+
+### Install and start CRC for the first time
+
+Download and install CRC using Red Hat's current instructions. Obtain a pull secret from the [OpenShift Local download page](https://console.redhat.com/openshift/create/local) and save it outside the repository (for example, in your Downloads folder). Treat it as a credential: do not paste it into chat, add it to the repo, or commit it.
+
+For a **new CRC cluster**, use the OpenShift preset and allocate resources that your host can spare. The following PowerShell example configures an 8-CPU, 16-GiB CRC VM (`memory` is in MiB); adjust these values to suit the host and check available capacity afterward. These commands do not delete an existing cluster:
+
+```powershell
+crc config set preset openshift
+crc config set cpus 8
+crc config set memory 16384
+crc setup
+crc start --pull-secret-file "$HOME\Downloads\pull-secret.txt"
+crc status
+```
+
+The pull-secret path above is an example; replace it with the path where you saved the file. On Bash or zsh, use a POSIX path, for example:
+
+```sh
+crc start --pull-secret-file "$HOME/Downloads/pull-secret.txt"
+```
+
+If CRC is already installed or a cluster already exists, do **not** repeat first-time setup or change the preset blindly. Check `crc status` and `crc config get preset`; preserve existing cluster data. Changing resources on an existing cluster may require a stop/restart and should follow the CRC documentation for that version. Never run `crc delete` as a routine setup or troubleshooting step.
+
+### Clone the project and check the local cluster
+
+```console
+git clone https://github.com/gauravmodi007/vllm-crc-gemma-3.git
+cd vllm-crc-gemma-3
+```
+
+Open this folder in VS Code if desired. Make sure `crc`, `oc`, `uv`, and `git` are on `PATH`. In PowerShell, load the CRC-provided `oc` environment in each new terminal:
+
+```powershell
+crc oc-env | Invoke-Expression
+```
+
+In Bash or zsh:
+
+```sh
+eval "$(crc oc-env)"
+```
+
+Start CRC if it is stopped (`crc start`), then verify that `oc` is connected to the **intended local CRC**, not another cluster, before proceeding:
 
 ```console
 crc status
+crc config get preset
+oc whoami
+oc config current-context
+oc get nodes -o wide
+oc get storageclass
+```
+
+The preset must be `openshift`, and the node architecture must be `amd64`. If `oc` is not logged in, use `crc console --credentials` and the local CRC login instructions; keep the displayed credentials private. Do not run `preflight`, `deploy`, or `route` until the context and storage class have been checked.
+
+## 1. Install project tools and inspect CRC capacity
+
+Use a terminal in the cloned `vllm-crc-gemma-3` folder. All following project commands run from this folder and work in PowerShell, Bash, or zsh without line continuations.
+
+Install/select a compatible Python with uv, then sync the locked local tooling dependencies:
+
+```console
+uv python install 3.11
+uv sync
+uv run python scripts/manage.py inspect
+```
+
+`uv sync` creates the project environment from `uv.lock`; the host only needs the YAML renderer and HTTP smoke-test dependencies. vLLM and PyTorch run inside the container, not in the Windows/macOS/Linux project environment. `inspect` displays cluster nodes, storage classes, PVs, and node capacity. CRC running does not prove the current `oc` context points at CRC; confirm the local API/context before any cluster mutation. The cluster uses CRI-O to run the containers.
+
+```console
 oc whoami
 oc config current-context
 oc get nodes -o wide
 ```
 
-If `oc` is missing, use CRC's `oc-env` instructions for your shell. For Bash/zsh: `eval "$(crc oc-env)"`; for PowerShell: `crc oc-env | Invoke-Expression`. If not logged in, use `crc console --credentials` and the displayed login instructions locally. Do not copy passwords into this project or agent chat.
-
-The cluster API URL and node must correspond to your intended CRC cluster before running apply commands.
-
-## 2. Install the project tools
-
-```console
-uv sync
-uv run python scripts/manage.py inspect
-```
-
-`uv` installs only local tooling (YAML rendering and HTTP API tests). vLLM and PyTorch are supplied by the container image; do not install vLLM on your Windows or macOS host for this project.
-
-Inspect prints node architecture, storage classes, PVs, and node JSON including allocatable resources. Verify:
+The cluster API URL and node must correspond to your intended CRC cluster before running apply commands. Inspect prints node architecture, storage classes, PVs, and node JSON including allocatable resources. Verify:
 
 - Node architecture is `amd64`. The Xeon host alone does not prove the CRC node's architecture or CPU flags.
 - There is room for a 2-CPU, 6 GiB application in addition to OpenShift's own pods. The low-concurrency settings are for a POC, not an optimal Xeon configuration.
 - CRC has sufficient disk space for the image, model files, cache, and cluster data. A requested 20 GiB volume does not enlarge the VM disk or reserve 20 GiB of physical free space on every provisioner.
 - Your cluster can reach Docker Hub and Hugging Face through your network/proxy. Configure trusted corporate CAs properly if needed.
 
-If there is insufficient allocatable memory, increase CRC's memory allocation using the supported CRC configuration workflow for your installed version, then recheck it. Do not stop or rebuild a working CRC cluster blindly. A typical 8 GiB total CRC VM does not have 8 GiB spare for this pod.
+If there is insufficient allocatable memory, adjust CRC's memory allocation using the supported configuration workflow for your installed version, then recheck it. Resource changes to a running cluster can require a restart. Do not stop, delete, or rebuild a working CRC cluster blindly. A typical 8 GiB total CRC VM does not have 8 GiB spare for this pod.
 
-## 3. Select storage in config.json
+## 2. Select storage in config.json
 
-The configuration uses the observed `crc-csi-hostpath-provisioner` StorageClass and creates a distinct `gemma-model-cache` **20 GiB PVC** in `vllm-poc`. It does not reuse or delete TinyLlama's `model-cache` PVC.
+The checked-in `config.json` sets `storage_class` to `crc-csi-hostpath-provisioner` and `existing_pv` to `null`; this creates a distinct `gemma-model-cache` **20 GiB PVC** in `vllm-poc`. It does not reuse or delete TinyLlama's `model-cache` PVC. Before applying anything on a new cluster, confirm that the configured class exists in `oc get storageclass`. If it does not, edit `config.json` to use an observed suitable class or set `storage_class` to `null` only when the cluster's default provisioner is the intended choice. Do not assume another cluster has the same class name.
+
+The checked-in `image` is already a verified amd64 registry digest. Keep it pinned for repeatable setup; do not rerun image resolution just to deploy this checkout. When intentionally changing the image, select a real supported amd64 image tag, then use the pinning procedure below and review the resulting `config.json` diff before committing any change.
 
 Options:
 
@@ -80,9 +140,9 @@ If the PVC uses WaitForFirstConsumer, Pending before the preflight Job is schedu
 
 PVC class/volume binding cannot simply be changed after binding. Choose correctly before preflight. Preserve model data when changing storage; do not delete PVCs to solve a scheduling error.
 
-## 4. Resolve and pin the official CPU image
+## 3. Resolve and pin the official CPU image (only when changing it)
 
-The bootstrap tag is `docker.io/vllm/vllm-openai-cpu:latest-x86_64`, which current upstream vLLM CPU documentation lists. The command below pulls it as linux/amd64, checks image architecture, reads its registry digest, and writes that digest to `config.json`.
+The checked-in image digest is ready to use and needs no local image tooling. If intentionally changing the image, set `image` in `config.json` to a real upstream tag such as `docker.io/vllm/vllm-openai-cpu:latest-x86_64`, which current upstream vLLM CPU documentation lists. The command below pulls the configured image as linux/amd64, checks its architecture, reads its registry digest, and writes that digest to `config.json`.
 
 ```console
 podman info
@@ -95,7 +155,7 @@ You may instead supply a digest from your registry tooling directly in `config.j
 
 `model_revision` pins the quantized checkpoint and tokenizer to the Hub commit in `config.json`. The preflight downloads its pinned `model.safetensors` into the Gemma PVC to verify repository access and persistent-cache writability before deploying.
 
-## 5. Render and review YAML
+## 4. Render and review YAML
 
 ```console
 uv run python scripts/manage.py render
@@ -138,7 +198,7 @@ Shared memory is a size ceiling, not an extra memory allowance or a reservation 
 
 Default security uses assigned non-root UID, dropped capabilities, and RuntimeDefault seccomp. No privileged pod, host IPC, or automatic anyuid grant. Some image releases may need a derived image for executable/library permissions or an administrator-reviewed CPU policy adjustment. Preflight catches several such failures; it does not exercise every inference kernel.
 
-## 6. Run the preflight inside CRC
+## 5. Run the preflight inside CRC
 
 ```console
 uv run python scripts/manage.py preflight
@@ -161,9 +221,9 @@ oc -n vllm-poc logs job/gemma-preflight
 oc -n vllm-poc get events --sort-by=.lastTimestamp
 ```
 
-The wait command may take 15 minutes. Image-pull problems, scheduling failures, and permissions errors appear in Events even when logs do not exist. If retrying with a changed image, pin it again and rerun preflight.
+The wait command may take up to 30 minutes. Image-pull problems, scheduling failures, and permissions errors appear in Events even when logs do not exist. If retrying with a changed image, pin it again and rerun preflight.
 
-## 7. Deploy the server
+## 6. Deploy the server
 
 ```console
 uv run python scripts/manage.py deploy
@@ -175,7 +235,7 @@ Deploy requires a successful preflight Job using the configured image digest. It
 
 If changing resources, storage, security, or CLI settings later, review rendered YAML and rerun preflight where relevant. Admission of an existing Deployment's pod template does not guarantee SCC admission of the new pod; pod Events are authoritative.
 
-## 8. Access and test from your computer
+## 7. Access and test from your computer
 
 In one VS Code terminal, keep this running:
 
@@ -206,7 +266,7 @@ response.raise_for_status()
 print(response.json()["choices"][0]["message"]["content"])
 ```
 
-## 9. Optional Route
+## 8. Optional Route
 
 Port-forward is enough for local testing. To deliberately expose the service through CRC's router:
 
@@ -217,7 +277,7 @@ oc -n vllm-poc get route vllm-gemma-3
 
 Use the returned HTTPS hostname. CRC DNS/certificate trust must be configured on the client; use a trusted certificate/CA rather than disabling verification. Edge TLS encrypts client-to-router traffic. This optional POC Route has no API authentication; restrict access to the intended local POC environment or add authentication before broader exposure. To test a trusted Route: `uv run python scripts/smoke_test.py --url https://RETURNED_HOSTNAME`.
 
-## 10. Diagnose failures
+## 9. Diagnose failures
 
 ```console
 uv run python scripts/manage.py diagnose
@@ -242,7 +302,7 @@ uv run python scripts/manage.py diagnose
 
 For production, CPU binding and NUMA placement deserve separate tuning. The default intentionally uses a small thread count under a Kubernetes CPU quota. No throughput estimate is promised.
 
-## 11. Stop without deleting model data
+## 10. Stop without deleting model data
 
 ```console
 uv run python scripts/manage.py stop
@@ -254,7 +314,7 @@ This scales the server to zero and preserves the PVC. Run deploy to restore one 
 
 Open `AGENT_PROMPT.md` and paste its contents into the agent. It asks the agent to inspect your actual cluster, validate image compatibility, deploy, and execute smoke tests. It also requires an evidence-based handoff rather than claiming success from YAML alone.
 
-## Sources checked for this project (2026-10-08)
+## Sources for project details and validation (CRC setup docs checked 2026-10-10; runtime validation 2026-10-08)
 
 - vLLM CPU installation, image tags, CPU settings: https://docs.vllm.ai/en/latest/getting_started/installation/cpu/
 - vLLM current serving arguments: https://docs.vllm.ai/en/latest/cli/serve/
